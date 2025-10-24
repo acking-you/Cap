@@ -110,7 +110,10 @@ async function main() {
 
 		const ffmpegDir = path.join(targetDir, "ffmpeg");
 		if (!(await fileExists(ffmpegDir)) || downloadedFfmpeg) {
-			await execFile("tar", ["xf", ffmpegZipPath, "-C", targetDir]);
+			// Use PowerShell's Expand-Archive on Windows (tar doesn't handle Windows paths well)
+			await exec(
+				`powershell -Command "Expand-Archive -Path '${ffmpegZipPath}' -DestinationPath '${targetDir}' -Force"`,
+			);
 			await fs.rm(ffmpegDir, { recursive: true, force: true }).catch(() => {});
 			await fs.rename(path.join(targetDir, FFMPEG_ZIP_NAME), ffmpegDir);
 			console.log("Extracted ffmpeg");
@@ -147,20 +150,50 @@ async function main() {
 		);
 		console.log("Copied ffmpeg/lib and ffmpeg/include to target/native-deps");
 
-		const { stdout: vcInstallDir } = await exec(
-			'$(& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property installationPath)',
-			{ shell: "powershell.exe" },
-		);
+		// Try to find libclang.dll (prefer standalone LLVM installation)
+		let libclangPath = null;
 
-		const libclangPath = path.join(
-			vcInstallDir.trim(),
-			"VC/Tools/LLVM/x64/bin/libclang.dll",
+		// First, try standalone LLVM installation
+		const llvmPath = path.join(
+			env.ProgramFiles || "C:\\Program Files",
+			"LLVM",
+			"bin",
 		);
+		if (await fileExists(path.join(llvmPath, "libclang.dll"))) {
+			libclangPath = llvmPath;
+			console.log("Found LLVM at", llvmPath);
+		} else {
+			// Fall back to Visual Studio's LLVM
+			try {
+				const { stdout: vcInstallDir } = await exec(
+					'$(& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -property installationPath)',
+					{ shell: "powershell.exe" },
+				);
 
-		cargoConfigContents += `LIBCLANG_PATH = "${libclangPath.replaceAll(
-			"\\",
-			"/",
-		)}"\n`;
+				const vsLlvmPath = path.join(
+					vcInstallDir.trim(),
+					"VC/Tools/LLVM/x64/bin",
+				);
+
+				if (await fileExists(path.join(vsLlvmPath, "libclang.dll"))) {
+					libclangPath = vsLlvmPath;
+					console.log("Found Visual Studio LLVM at", vsLlvmPath);
+				}
+			} catch (e) {
+				console.warn("Could not find Visual Studio installation");
+			}
+		}
+
+		if (libclangPath) {
+			cargoConfigContents += `LIBCLANG_PATH = "${libclangPath.replaceAll(
+				"\\",
+				"/",
+			)}"\n`;
+		} else {
+			console.warn(
+				"Warning: libclang.dll not found. Please install LLVM from https://llvm.org/ or ensure Visual Studio Build Tools with C++ LLVM tools are installed.",
+			);
+		}
 	}
 
 	await fs.mkdir(path.join(__root, ".cargo"), { recursive: true });

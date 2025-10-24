@@ -12,6 +12,8 @@
     <b>Downloads for </b>
 		<a href="https://cap.so/download">macOS & Windows</a>
     <br />
+    <br />
+    <a href="README.md">English</a> · <a href="README.zh.md">简体中文</a>
   </p>
 </p>
 <br/>
@@ -30,6 +32,12 @@ You can also use the button below to deploy Cap Web to Railway:
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/PwpGcf)
 
 Cap Desktop can connect to your self-hosted Cap Web instance regardless of if you build it yourself or [download from our website](https://cap.so/download).
+
+# Building from Source
+
+## Windows
+
+See the [Windows Build Guide](docs/windows-build-guide.en.md) for detailed instructions on building Cap Desktop on Windows.
 
 # Monorepo App Architecture
 
