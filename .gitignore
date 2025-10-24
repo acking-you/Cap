@@ -47,3 +47,4 @@ tauri.windows.conf.json
 # Cursor
 .cursor
 .env*.local
+nul
