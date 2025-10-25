@@ -14,6 +14,7 @@ import {
 	createResource,
 	createSignal,
 	ErrorBoundary,
+	For,
 	onCleanup,
 	onMount,
 	Show,
@@ -21,7 +22,6 @@ import {
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 
-import Mode from "~/components/Mode";
 import Tooltip from "~/components/Tooltip";
 import { identifyUser, trackEvent } from "~/utils/analytics";
 import {
@@ -243,6 +243,8 @@ function Page() {
 						capture_target,
 						mode: payload.mode,
 						capture_system_audio: rawOptions.captureSystemAudio,
+						recording_bpp: rawOptions.recordingBpp,
+						recording_preset: rawOptions.recordingPreset,
 					}),
 					setOptions,
 				);
@@ -298,20 +300,6 @@ function Page() {
 
 					<ChangelogButton />
 
-					<Show when={!license.isLoading && license.data?.type === "personal"}>
-						<button
-							type="button"
-							onClick={() => commands.showWindow("Upgrade")}
-							class="flex relative justify-center items-center w-5 h-5"
-						>
-							<IconLucideGift class="text-gray-11 size-5 hover:text-gray-12" />
-							<div
-								style={{ "background-color": "#FF4747" }}
-								class="block z-10 absolute top-0 right-0 size-1.5 rounded-full animate-bounce"
-							/>
-						</button>
-					</Show>
-
 					{import.meta.env.DEV && (
 						<button
 							type="button"
@@ -326,7 +314,7 @@ function Page() {
 				</div>
 			</WindowChromeHeader>
 			<div class="flex items-center justify-between pb-[0.25rem]">
-				<div class="flex items-center space-x-1">
+				<div class="flex items-center space-x-2">
 					<a
 						class="*:w-[92px] *:h-auto text-[--text-primary]"
 						target="_blank"
@@ -339,31 +327,8 @@ function Page() {
 						<IconCapLogoFullDark class="hidden dark:block" />
 						<IconCapLogoFull class="block dark:hidden" />
 					</a>
-					<ErrorBoundary fallback={<></>}>
-						<Suspense>
-							<span
-								onClick={async () => {
-									if (license.data?.type !== "pro") {
-										await commands.showWindow("Upgrade");
-									}
-								}}
-								class={cx(
-									"text-[0.6rem] ml-2 rounded-lg px-1 py-0.5",
-									license.data?.type === "pro"
-										? "bg-[--blue-400] text-gray-1 dark:text-gray-12"
-										: "bg-gray-3 cursor-pointer hover:bg-gray-5",
-								)}
-							>
-								{license.data?.type === "commercial"
-									? "Commercial"
-									: license.data?.type === "pro"
-										? "Pro"
-										: "Personal"}
-							</span>
-						</Suspense>
-					</ErrorBoundary>
+					<RecordingQualitySettings />
 				</div>
-				<Mode />
 			</div>
 			<div>
 				<AreaSelectButton
@@ -483,76 +448,29 @@ function Page() {
 			/>
 			<SystemAudio />
 			<div class="flex items-center space-x-1 w-full">
-				{rawOptions.mode === "instant" && !auth.data ? (
-					<SignInButton>
-						Sign In for{" "}
-						<IconCapInstant class="invert-0 dark:invert size-[0.8rem] mx-1" />
-						Instant Mode
-					</SignInButton>
-				) : (
-					<Tooltip
-						childClass="w-full flex"
-						placement="top"
-						content={
-							<>
-								Instant Mode recordings are limited
-								<br /> to 5 mins,{" "}
-								<button
-									class="underline"
-									onClick={() => commands.showWindow("Upgrade")}
-								>
-									Upgrade to Pro
-								</button>
-							</>
-						}
-						openDelay={0}
-						closeDelay={0}
-						disabled={
-							!(
-								rawOptions.mode === "instant" &&
-								auth.data?.plan?.upgraded === false
-							)
-						}
-					>
-						<Button
-							disabled={toggleRecording.isPending}
-							variant="blue"
-							size="md"
-							onClick={() => toggleRecording.mutate({ mode: rawOptions.mode })}
-							class="flex flex-grow justify-center items-center"
-						>
-							{isRecording() ? (
-								"Stop Recording"
-							) : (
-								<>
-									{rawOptions.mode === "instant" ? (
-										<IconCapInstant
-											class={cx(
-												"size-[0.8rem] mr-1.5",
-												toggleRecording.isPending
-													? "opacity-50"
-													: "opacity-100",
-											)}
-										/>
-									) : (
-										<IconCapFilmCut
-											class={cx(
-												"size-[0.8rem] mr-2 -mt-[1.5px]",
-												toggleRecording.isPending
-													? "opacity-50"
-													: "opacity-100",
-											)}
-										/>
-									)}
-									{rawOptions.mode === "instant" &&
-									auth.data?.plan?.upgraded === false
-										? "Start 5 min recording"
-										: "Start recording"}
-								</>
-							)}
-						</Button>
-					</Tooltip>
-				)}
+				<Button
+					disabled={toggleRecording.isPending}
+					variant="blue"
+					size="md"
+					onClick={() => toggleRecording.mutate({ mode: "studio" })}
+					class="flex flex-grow justify-center items-center"
+				>
+					{isRecording() ? (
+						"Stop Recording"
+					) : (
+						<>
+							<IconCapFilmCut
+								class={cx(
+									"size-[0.8rem] mr-2 -mt-[1.5px]",
+									toggleRecording.isPending
+										? "opacity-50"
+										: "opacity-100",
+								)}
+							/>
+							Start recording
+						</>
+					)}
+				</Button>
 			</div>
 		</div>
 	);
@@ -1159,5 +1077,52 @@ function ChangelogButton() {
 				)}
 			</button>
 		</Tooltip>
+	);
+}
+
+const BPP_OPTIONS = [
+	{ label: "0.5x", value: 0.6 },
+	{ label: "1x", value: 1.2 },
+	{ label: "2x", value: 2.4 },
+] as const;
+
+const PRESET_OPTIONS = [
+	{ label: "Fast", value: "ultrafast" },
+	{ label: "Medium", value: "medium" },
+	{ label: "Slow", value: "slow" },
+] as const;
+
+function RecordingQualitySettings() {
+	const { rawOptions, setOptions } = useRecordingOptions();
+
+	return (
+		<div class="flex items-center gap-1.5 text-xs">
+			<Tooltip content="Recording quality multiplier">
+				<select
+					value={rawOptions.recordingBpp ?? 1.2}
+					onChange={(e) => setOptions("recordingBpp", Number.parseFloat(e.currentTarget.value))}
+					class="px-1.5 py-0.5 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
+				>
+					<For each={BPP_OPTIONS}>
+						{(option) => (
+							<option value={option.value}>{option.label}</option>
+						)}
+					</For>
+				</select>
+			</Tooltip>
+			<Tooltip content="Encoding speed vs quality">
+				<select
+					value={rawOptions.recordingPreset ?? "medium"}
+					onChange={(e) => setOptions("recordingPreset", e.currentTarget.value as "slow" | "medium" | "ultrafast")}
+					class="px-1.5 py-0.5 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
+				>
+					<For each={PRESET_OPTIONS}>
+						{(option) => (
+							<option value={option.value}>{option.label}</option>
+						)}
+					</For>
+				</select>
+			</Tooltip>
+		</div>
 	);
 }

@@ -1,24 +1,11 @@
-import { Button } from "@cap/ui-solid";
 import { A, type RouteSectionProps } from "@solidjs/router";
 import { getVersion } from "@tauri-apps/api/app";
 import "@total-typescript/ts-reset/filter-boolean";
 import { createResource, For, Show, Suspense } from "solid-js";
 import { CapErrorBoundary } from "~/components/CapErrorBoundary";
-import { SignInButton } from "~/components/SignInButton";
-
-import { authStore } from "~/store";
-import { trackEvent } from "~/utils/analytics";
 
 export default function Settings(props: RouteSectionProps) {
-	const auth = authStore.createQuery();
 	const [version] = createResource(() => getVersion());
-
-	const handleAuth = async () => {
-		if (auth.data) {
-			trackEvent("user_signed_out", { platform: "desktop" });
-			authStore.set(undefined);
-		}
-	};
 
 	return (
 		<div class="flex-1 flex flex-row divide-x divide-gray-3 text-[0.875rem] leading-[1.25rem] overflow-y-hidden">
@@ -40,16 +27,6 @@ export default function Settings(props: RouteSectionProps) {
 								href: "recordings",
 								name: "Previous Recordings",
 								icon: IconLucideSquarePlay,
-							},
-							{
-								href: "integrations",
-								name: "Integrations",
-								icon: IconLucideUnplug,
-							},
-							{
-								href: "license",
-								name: "License",
-								icon: IconLucideGift,
 							},
 							{
 								href: "experimental",
@@ -86,17 +63,6 @@ export default function Settings(props: RouteSectionProps) {
 					<Show when={version()}>
 						{(v) => <p class="mb-2 text-xs text-gray-11">v{v()}</p>}
 					</Show>
-					{auth.data ? (
-						<Button
-							onClick={handleAuth}
-							variant={auth.data ? "gray" : "dark"}
-							class="w-full"
-						>
-							Sign Out
-						</Button>
-					) : (
-						<SignInButton>Sign In</SignInButton>
-					)}
 				</div>
 			</div>
 			<div class="overflow-y-hidden flex-1 animate-in">

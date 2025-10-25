@@ -6,7 +6,6 @@ import { createSignal, Show } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import Tooltip from "~/components/Tooltip";
 import { createProgressBar } from "~/routes/editor/utils";
-import { authStore } from "~/store";
 import { exportVideo } from "~/utils/export";
 import { commands, events, type UploadProgress } from "~/utils/tauri";
 import { useEditorContext } from "./context";
@@ -30,28 +29,6 @@ function ShareButton() {
 			setUploadState({ type: "idle" });
 
 			console.log("Starting upload process...");
-
-			// Check authentication first
-			const existingAuth = await authStore.get();
-			if (!existingAuth) {
-				throw new Error("You need to sign in to share recordings");
-			}
-
-			const metadata = await commands.getVideoMetadata(projectPath);
-			const plan = await commands.checkUpgradedAndUpdate();
-			const canShare = {
-				allowed: plan || metadata.duration < 300,
-				reason: !plan && metadata.duration >= 300 ? "upgrade_required" : null,
-			};
-
-			if (!canShare.allowed) {
-				if (canShare.reason === "upgrade_required") {
-					await commands.showWindow("Upgrade");
-					throw new Error(
-						"Upgrade required to share recordings longer than 5 minutes",
-					);
-				}
-			}
 
 			const uploadChannel = new Channel<UploadProgress>((progress) => {
 				console.log("Upload progress:", progress);
@@ -108,13 +85,6 @@ function ShareButton() {
 						},
 						uploadChannel,
 					);
-
-			if (result === "NotAuthenticated") {
-				throw new Error("You need to sign in to share recordings");
-			} else if (result === "PlanCheckFailed")
-				throw new Error("Failed to verify your subscription status");
-			else if (result === "UpgradeRequired")
-				throw new Error("This feature requires an upgraded plan");
 
 			setUploadState({ type: "link-copied" });
 

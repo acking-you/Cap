@@ -8,15 +8,21 @@
 	},
 	"plugins": {
 		"updater": {
-			"active": true,
-			"endpoints": [
-				"https://cdn.crabnebula.app/update/cap/cap/{{target}}-{{arch}}/{{current_version}}"
-			],
-			"dialog": true,
-			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyOTAzOTdFNzJFQkRFOTMKUldTVDN1dHlmam1RNHFXb1VYTXlrQk1iMFFkcjN0YitqZlA5WnZNY0ZtQ1dvM1dxK211M3VIYUQK"
+			"active": false,
+			"pubkey": ""
 		}
 	},
 	"bundle": {
+		"createUpdaterArtifacts": false,
+		"resources": {
+			"assets/backgrounds/macOS/*": "assets/backgrounds/macOS/",
+			"assets/backgrounds/blue/*": "assets/backgrounds/blue/",
+			"assets/backgrounds/dark/*": "assets/backgrounds/dark/",
+			"assets/backgrounds/orange/*": "assets/backgrounds/orange/",
+			"assets/backgrounds/purple/*": "assets/backgrounds/purple/",
+			"../src/assets/rive/*.riv": "assets/rive/",
+			"../../../target/ffmpeg/bin/*.dll": "./"
+		},
 		"macOS": {
 			"entitlements": "Entitlements.plist"
 		},

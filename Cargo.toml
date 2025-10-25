@@ -72,11 +72,18 @@ unchecked_duration_subtraction = "deny"
 
 # Optimize for smaller binary size
 [profile.release]
-panic = "abort"   # Strip expensive panic clean-up logic
-codegen-units = 1 # Compile crates one after another so the compiler can optimize better
-lto = true        # Enables link to optimizations
-opt-level = "s"   # Optimize for binary size
-debug = true
+panic = "abort"       # Strip expensive panic clean-up logic
+codegen-units = 1     # Compile crates one after another so the compiler can optimize better
+lto = true            # Enables link-time optimizations
+opt-level = "z"       # Optimize aggressively for binary size (changed from "s")
+strip = true          # Strip symbols from binary
+debug = false         # Remove debug info (changed from true)
+incremental = false   # Disable incremental compilation for better optimization
+
+# Optional: Further size optimization for dependencies
+[profile.release.package."*"]
+opt-level = "z"       # Apply aggressive size optimization to all dependencies
+strip = true
 
 [patch.crates-io]
 # screencapturekit = { git = "https://github.com/CapSoftware/screencapturekit-rs", rev = "7ff1e103742e56c8f6c2e940b5e52684ed0bed69" } # branch = "cap-main"

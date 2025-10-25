@@ -2327,6 +2327,8 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                         }),
                         capture_system_audio: settings.system_audio,
                         mode: event.mode,
+                        recording_bpp: Some(1.2),
+                        recording_preset: Some("medium".to_string()),
                     },
                 )
                 .await;

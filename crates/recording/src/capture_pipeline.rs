@@ -13,6 +13,8 @@ pub trait MakeCapturePipeline: ScreenCaptureFormat + std::fmt::Debug + 'static {
         screen_capture: screen_capture::VideoSourceConfig,
         output_path: PathBuf,
         start_time: Timestamps,
+        recording_bpp: Option<f32>,
+        recording_preset: Option<String>,
     ) -> anyhow::Result<OutputPipeline>
     where
         Self: Sized;
@@ -36,6 +38,8 @@ impl MakeCapturePipeline for screen_capture::CMSampleBufferCapture {
         screen_capture: screen_capture::VideoSourceConfig,
         output_path: PathBuf,
         start_time: Timestamps,
+        _recording_bpp: Option<f32>,
+        _recording_preset: Option<String>,
     ) -> anyhow::Result<OutputPipeline> {
         OutputPipeline::builder(output_path.clone())
             .with_video::<screen_capture::VideoSource>(screen_capture)
@@ -76,8 +80,11 @@ impl MakeCapturePipeline for screen_capture::Direct3DCapture {
         screen_capture: screen_capture::VideoSourceConfig,
         output_path: PathBuf,
         start_time: Timestamps,
+        recording_bpp: Option<f32>,
+        _recording_preset: Option<String>,
     ) -> anyhow::Result<OutputPipeline> {
         let d3d_device = screen_capture.d3d_device.clone();
+        let bitrate_multiplier = recording_bpp.unwrap_or(1.2);
 
         OutputPipeline::builder(output_path.clone())
             .with_video::<screen_capture::VideoSource>(screen_capture)
@@ -85,7 +92,7 @@ impl MakeCapturePipeline for screen_capture::Direct3DCapture {
             .build::<WindowsMuxer>(WindowsMuxerConfig {
                 pixel_format: screen_capture::Direct3DCapture::PIXEL_FORMAT.as_dxgi(),
                 d3d_device,
-                bitrate_multiplier: 0.15f32,
+                bitrate_multiplier,
                 frame_rate: 30u32,
                 output_size: None,
             })

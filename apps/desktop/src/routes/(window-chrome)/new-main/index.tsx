@@ -2,11 +2,6 @@ import { Button } from "@cap/ui-solid";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { useNavigate } from "@solidjs/router";
 import { createMutation, useQuery } from "@tanstack/solid-query";
-import { listen } from "@tauri-apps/api/event";
-import {
-	getAllWebviewWindows,
-	WebviewWindow,
-} from "@tauri-apps/api/webviewWindow";
 import {
 	getCurrentWindow,
 	LogicalSize,
@@ -32,7 +27,6 @@ import { Transition } from "solid-transition-group";
 import Tooltip from "~/components/Tooltip";
 import { Input } from "~/routes/editor/ui";
 import { generalSettingsStore } from "~/store";
-import { createSignInMutation } from "~/utils/auth";
 import {
 	createCameraMutation,
 	createCurrentRecordingQuery,
@@ -595,8 +589,6 @@ function Page() {
 
 	const license = createLicenseQuery();
 
-	const signIn = createSignInMutation();
-
 	const BaseControls = () => (
 		<div class="space-y-2">
 			<CameraSelect
@@ -742,24 +734,6 @@ function Page() {
 		</Transition>
 	);
 
-	const startSignInCleanup = listen("start-sign-in", async () => {
-		const abort = new AbortController();
-		for (const win of await getAllWebviewWindows()) {
-			if (win.label.startsWith("target-select-overlay")) {
-				await win.hide();
-			}
-		}
-
-		await signIn.mutateAsync(abort).catch(() => {});
-
-		for (const win of await getAllWebviewWindows()) {
-			if (win.label.startsWith("target-select-overlay")) {
-				await win.show();
-			}
-		}
-	});
-	onCleanup(() => startSignInCleanup.then((cb) => cb()));
-
 	return (
 		<div
 			class={`flex relative ${
@@ -817,52 +791,9 @@ function Page() {
 					{ostype() === "macos" && (
 						<div class="flex-1" data-tauri-drag-region />
 					)}
-					<ErrorBoundary fallback={<></>}>
-						<Suspense>
-							<span
-								onClick={async () => {
-									if (license.data?.type !== "pro") {
-										await commands.showWindow("Upgrade");
-									}
-								}}
-								class={cx(
-									"text-[0.6rem] ml-2 rounded-full px-1.5 py-0.5",
-									license.data?.type === "pro"
-										? "bg-[--blue-300] text-gray-1 dark:text-gray-12"
-										: "bg-gray-4 cursor-pointer hover:bg-gray-5",
-									ostype() === "windows" && "ml-2",
-								)}
-							>
-								{license.data?.type === "commercial"
-									? "Commercial"
-									: license.data?.type === "pro"
-										? "Pro"
-										: "Personal"}
-							</span>
-						</Suspense>
-					</ErrorBoundary>
 				</div>
 			</WindowChromeHeader>
-			<Show when={signIn.isPending}>
-				<div class="flex absolute inset-0 justify-center items-center bg-gray-1 animate-in fade-in">
-					<div class="flex flex-col gap-4 justify-center items-center">
-						<span>Signing In...</span>
-
-						<Button
-							onClick={() => {
-								signIn.variables?.abort();
-								signIn.reset();
-							}}
-							variant="gray"
-							class="w-full"
-						>
-							Cancel Sign In
-						</Button>
-					</div>
-				</div>
-			</Show>
-			<Show when={!signIn.isPending}>
-				<Show when={activeMenu()} keyed fallback={<TargetSelectionHome />}>
+			<Show when={activeMenu()} keyed fallback={<TargetSelectionHome />}>
 					{(variant) =>
 						variant === "display" ? (
 							<TargetMenuPanel
@@ -892,7 +823,6 @@ function Page() {
 							/>
 						)
 					}
-				</Show>
 			</Show>
 		</div>
 	);

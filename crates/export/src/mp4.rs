@@ -1,6 +1,6 @@
 use crate::ExporterBase;
 use cap_editor::{AudioRenderer, get_audio_segments};
-use cap_enc_ffmpeg::{AACEncoder, AudioEncoder, H264Encoder, MP4File, MP4Input};
+use cap_enc_ffmpeg::{AACEncoder, AudioEncoder, H264Encoder, H264Preset, MP4File, MP4Input};
 use cap_media_info::{RawVideoFormat, VideoInfo};
 use cap_project::XY;
 use cap_rendering::{ProjectUniforms, RenderSegment, RenderedFrame};
@@ -13,6 +13,8 @@ use tracing::{info, trace, warn};
 
 #[derive(Deserialize, Type, Clone, Copy, Debug)]
 pub enum ExportCompression {
+    NearLossless,
+    HighQuality,
     Minimal,
     Social,
     Web,
@@ -22,10 +24,20 @@ pub enum ExportCompression {
 impl ExportCompression {
     pub fn bits_per_pixel(&self) -> f32 {
         match self {
-            Self::Minimal => 0.3,
+            Self::NearLossless => 2.0,
+            Self::HighQuality => 0.8,
+            Self::Minimal => 0.5,
             Self::Social => 0.15,
             Self::Web => 0.08,
             Self::Potato => 0.04,
+        }
+    }
+
+    pub fn preset(&self) -> H264Preset {
+        match self {
+            Self::NearLossless | Self::HighQuality => H264Preset::Slow,
+            Self::Minimal => H264Preset::Medium,
+            _ => H264Preset::Ultrafast,
         }
     }
 }
@@ -81,6 +93,7 @@ impl Mp4ExportSettings {
                 |o| {
                     H264Encoder::builder(video_info)
                         .with_bpp(self.compression.bits_per_pixel())
+                        .with_preset(self.compression.preset())
                         .build(o)
                 },
                 |o| {

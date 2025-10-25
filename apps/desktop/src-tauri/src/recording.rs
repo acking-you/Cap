@@ -239,6 +239,14 @@ pub struct StartRecordingInputs {
     #[serde(default)]
     pub capture_system_audio: bool,
     pub mode: RecordingMode,
+    #[serde(default = "default_recording_bpp")]
+    pub recording_bpp: Option<f32>,
+    #[serde(default)]
+    pub recording_preset: Option<String>,
+}
+
+fn default_recording_bpp() -> Option<f32> {
+    Some(1.2)
 }
 
 #[derive(tauri_specta::Event, specta::Type, Clone, Debug, serde::Serialize)]
@@ -501,7 +509,8 @@ pub async fn start_recording(
                             general_settings
                                 .map(|s| s.custom_cursor_capture)
                                 .unwrap_or_default(),
-                        );
+                        )
+                        .with_recording_quality(inputs.recording_bpp, inputs.recording_preset.clone());
 
                         #[cfg(target_os = "macos")]
                         {

@@ -250,6 +250,8 @@ pub struct ActorBuilder {
     system_audio: bool,
     mic_feed: Option<Arc<MicrophoneFeedLock>>,
     max_output_size: Option<u32>,
+    recording_bpp: Option<f32>,
+    recording_preset: Option<String>,
     #[cfg(target_os = "macos")]
     excluded_windows: Vec<WindowId>,
 }
@@ -262,6 +264,8 @@ impl ActorBuilder {
             system_audio: false,
             mic_feed: None,
             max_output_size: None,
+            recording_bpp: None,
+            recording_preset: None,
             #[cfg(target_os = "macos")]
             excluded_windows: Vec::new(),
         }
@@ -279,6 +283,12 @@ impl ActorBuilder {
 
     pub fn with_max_output_size(mut self, max_output_size: u32) -> Self {
         self.max_output_size = Some(max_output_size);
+        self
+    }
+
+    pub fn with_recording_quality(mut self, bpp: Option<f32>, preset: Option<String>) -> Self {
+        self.recording_bpp = bpp;
+        self.recording_preset = preset;
         self
     }
 

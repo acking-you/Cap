@@ -32,8 +32,10 @@ export type ResolutionOption = {
 };
 
 export const RESOLUTION_OPTIONS = {
+	_original: { label: "Original", value: "original", width: 0, height: 0 },
 	_720p: { label: "720p", value: "720p", width: 1280, height: 720 },
 	_1080p: { label: "1080p", value: "1080p", width: 1920, height: 1080 },
+	_1440p: { label: "2K (1440p)", value: "1440p", width: 2560, height: 1440 },
 	_4k: { label: "4K", value: "4k", width: 3840, height: 2160 },
 };
 

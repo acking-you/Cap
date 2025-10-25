@@ -46,13 +46,13 @@ pub enum H264EncoderError {
 }
 
 impl H264EncoderBuilder {
-    pub const QUALITY_BPP: f32 = 0.3;
+    pub const QUALITY_BPP: f32 = 1.2;
 
     pub fn new(input_config: VideoInfo) -> Self {
         Self {
             input_config,
             bpp: Self::QUALITY_BPP,
-            preset: H264Preset::Ultrafast,
+            preset: H264Preset::Medium,
             output_size: None,
         }
     }

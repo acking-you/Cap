@@ -121,6 +121,8 @@ export function createOptionsQuery() {
 		captureSystemAudio?: boolean;
 		targetMode?: "display" | "window" | "area" | null;
 		cameraID?: DeviceOrModelID | null;
+		recordingBpp?: number;
+		recordingPreset?: "slow" | "medium" | "ultrafast";
 		/** @deprecated */
 		cameraLabel: string | null;
 	}>({
@@ -128,6 +130,8 @@ export function createOptionsQuery() {
 		micName: null,
 		cameraLabel: null,
 		mode: "studio",
+		recordingBpp: 1.2,
+		recordingPreset: "medium",
 	});
 
 	createEventListener(window, "storage", (e) => {

@@ -348,6 +348,8 @@ pub struct ActorBuilder {
     mic_feed: Option<Arc<MicrophoneFeedLock>>,
     camera_feed: Option<Arc<CameraFeedLock>>,
     custom_cursor: bool,
+    recording_bpp: Option<f32>,
+    recording_preset: Option<String>,
     #[cfg(target_os = "macos")]
     excluded_windows: Vec<WindowId>,
 }
@@ -361,6 +363,8 @@ impl ActorBuilder {
             mic_feed: None,
             camera_feed: None,
             custom_cursor: false,
+            recording_bpp: None,
+            recording_preset: None,
             #[cfg(target_os = "macos")]
             excluded_windows: Vec::new(),
         }
@@ -383,6 +387,12 @@ impl ActorBuilder {
 
     pub fn with_custom_cursor(mut self, custom_cursor: bool) -> Self {
         self.custom_cursor = custom_cursor;
+        self
+    }
+
+    pub fn with_recording_quality(mut self, bpp: Option<f32>, preset: Option<String>) -> Self {
+        self.recording_bpp = bpp;
+        self.recording_preset = preset;
         self
     }
 
@@ -409,6 +419,8 @@ impl ActorBuilder {
                 excluded_windows: self.excluded_windows,
             },
             self.custom_cursor,
+            self.recording_bpp,
+            self.recording_preset,
         )
         .await
     }
@@ -419,6 +431,8 @@ async fn spawn_studio_recording_actor(
     recording_dir: PathBuf,
     base_inputs: RecordingBaseInputs,
     custom_cursor_capture: bool,
+    recording_bpp: Option<f32>,
+    recording_preset: Option<String>,
 ) -> anyhow::Result<ActorHandle> {
     ensure_dir(&recording_dir)?;
 
@@ -450,6 +464,8 @@ async fn spawn_studio_recording_actor(
         custom_cursor_capture,
         start_time,
         completion_tx.clone(),
+        recording_bpp,
+        recording_preset,
     );
 
     let index = 0;
@@ -587,6 +603,8 @@ struct SegmentPipelineFactory {
     start_time: Timestamps,
     index: u32,
     completion_tx: watch::Sender<Option<Result<(), PipelineDoneError>>>,
+    recording_bpp: Option<f32>,
+    recording_preset: Option<String>,
 }
 
 impl SegmentPipelineFactory {
@@ -598,6 +616,8 @@ impl SegmentPipelineFactory {
         custom_cursor_capture: bool,
         start_time: Timestamps,
         completion_tx: watch::Sender<Option<Result<(), PipelineDoneError>>>,
+        recording_bpp: Option<f32>,
+        recording_preset: Option<String>,
     ) -> Self {
         Self {
             segments_dir,
@@ -607,6 +627,8 @@ impl SegmentPipelineFactory {
             start_time,
             index: 0,
             completion_tx,
+            recording_bpp,
+            recording_preset,
         }
     }
 
@@ -624,6 +646,8 @@ impl SegmentPipelineFactory {
             next_cursors_id,
             self.custom_cursor_capture,
             self.start_time,
+            self.recording_bpp,
+            self.recording_preset.clone(),
         )
         .await?;
 
@@ -682,6 +706,8 @@ async fn create_segment_pipeline(
     next_cursors_id: u32,
     custom_cursor_capture: bool,
     start_time: Timestamps,
+    recording_bpp: Option<f32>,
+    recording_preset: Option<String>,
 ) -> anyhow::Result<Pipeline> {
     #[cfg(windows)]
     let d3d_device = crate::capture_pipeline::create_d3d_device().unwrap();
@@ -718,6 +744,8 @@ async fn create_segment_pipeline(
         capture_source,
         screen_output_path.clone(),
         start_time,
+        recording_bpp,
+        recording_preset,
     )
     .instrument(error_span!("screen-out"))
     .await
