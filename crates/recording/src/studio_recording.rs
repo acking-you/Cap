@@ -350,6 +350,8 @@ pub struct ActorBuilder {
     custom_cursor: bool,
     recording_bpp: Option<f32>,
     recording_preset: Option<String>,
+    encoder_type: Option<String>,
+    recording_fps: Option<u32>,
     #[cfg(target_os = "macos")]
     excluded_windows: Vec<WindowId>,
 }
@@ -365,6 +367,8 @@ impl ActorBuilder {
             custom_cursor: false,
             recording_bpp: None,
             recording_preset: None,
+            encoder_type: None,
+            recording_fps: None,
             #[cfg(target_os = "macos")]
             excluded_windows: Vec::new(),
         }
@@ -396,6 +400,16 @@ impl ActorBuilder {
         self
     }
 
+    pub fn with_encoder_type(mut self, encoder_type: Option<String>) -> Self {
+        self.encoder_type = encoder_type;
+        self
+    }
+
+    pub fn with_recording_fps(mut self, fps: u32) -> Self {
+        self.recording_fps = Some(fps);
+        self
+    }
+
     #[cfg(target_os = "macos")]
     pub fn with_excluded_windows(mut self, excluded_windows: Vec<WindowId>) -> Self {
         self.excluded_windows = excluded_windows;
@@ -421,6 +435,8 @@ impl ActorBuilder {
             self.custom_cursor,
             self.recording_bpp,
             self.recording_preset,
+            self.encoder_type,
+            self.recording_fps,
         )
         .await
     }
@@ -433,6 +449,8 @@ async fn spawn_studio_recording_actor(
     custom_cursor_capture: bool,
     recording_bpp: Option<f32>,
     recording_preset: Option<String>,
+    encoder_type: Option<String>,
+    recording_fps: Option<u32>,
 ) -> anyhow::Result<ActorHandle> {
     ensure_dir(&recording_dir)?;
 
@@ -466,6 +484,8 @@ async fn spawn_studio_recording_actor(
         completion_tx.clone(),
         recording_bpp,
         recording_preset,
+        encoder_type,
+        recording_fps,
     );
 
     let index = 0;
@@ -605,6 +625,8 @@ struct SegmentPipelineFactory {
     completion_tx: watch::Sender<Option<Result<(), PipelineDoneError>>>,
     recording_bpp: Option<f32>,
     recording_preset: Option<String>,
+    encoder_type: Option<String>,
+    recording_fps: Option<u32>,
 }
 
 impl SegmentPipelineFactory {
@@ -618,6 +640,8 @@ impl SegmentPipelineFactory {
         completion_tx: watch::Sender<Option<Result<(), PipelineDoneError>>>,
         recording_bpp: Option<f32>,
         recording_preset: Option<String>,
+        encoder_type: Option<String>,
+        recording_fps: Option<u32>,
     ) -> Self {
         Self {
             segments_dir,
@@ -629,6 +653,8 @@ impl SegmentPipelineFactory {
             completion_tx,
             recording_bpp,
             recording_preset,
+            encoder_type,
+            recording_fps,
         }
     }
 
@@ -648,6 +674,8 @@ impl SegmentPipelineFactory {
             self.start_time,
             self.recording_bpp,
             self.recording_preset.clone(),
+            self.encoder_type.clone(),
+            self.recording_fps,
         )
         .await?;
 
@@ -708,6 +736,8 @@ async fn create_segment_pipeline(
     start_time: Timestamps,
     recording_bpp: Option<f32>,
     recording_preset: Option<String>,
+    encoder_type: Option<String>,
+    recording_fps: Option<u32>,
 ) -> anyhow::Result<Pipeline> {
     #[cfg(windows)]
     let d3d_device = crate::capture_pipeline::create_d3d_device().unwrap();
@@ -715,11 +745,20 @@ async fn create_segment_pipeline(
     let (display, crop) =
         target_to_display_and_crop(&base_inputs.capture_target).context("target_display_crop")?;
 
+    let fps = recording_fps.unwrap_or_else(|| {
+        let screen_refresh_rate = display.refresh_rate() as u32;
+        if screen_refresh_rate > 0 {
+            screen_refresh_rate
+        } else {
+            60
+        }
+    });
+
     let screen_config = ScreenCaptureConfig::<ScreenCaptureMethod>::init(
         display,
         crop,
         !custom_cursor_capture,
-        120,
+        fps,
         start_time.system_time(),
         base_inputs.capture_system_audio,
         #[cfg(windows)]
@@ -746,6 +785,8 @@ async fn create_segment_pipeline(
         start_time,
         recording_bpp,
         recording_preset,
+        encoder_type,
+        fps,
     )
     .instrument(error_span!("screen-out"))
     .await

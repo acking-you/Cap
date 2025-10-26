@@ -47,7 +47,7 @@ import {
 function getWindowSize() {
 	return {
 		width: 300,
-		height: 340,
+		height: 420,
 	};
 }
 
@@ -243,8 +243,9 @@ function Page() {
 						capture_target,
 						mode: payload.mode,
 						capture_system_audio: rawOptions.captureSystemAudio,
-						recording_bpp: rawOptions.recordingBpp,
+						recording_quality_percent: rawOptions.recordingQualityPercent,
 						recording_preset: rawOptions.recordingPreset,
+						encoder_type: rawOptions.encoderType,
 					}),
 					setOptions,
 				);
@@ -314,22 +315,20 @@ function Page() {
 				</div>
 			</WindowChromeHeader>
 			<div class="flex items-center justify-between pb-[0.25rem]">
-				<div class="flex items-center space-x-2">
-					<a
-						class="*:w-[92px] *:h-auto text-[--text-primary]"
-						target="_blank"
-						href={
-							auth.data
-								? `${import.meta.env.VITE_SERVER_URL}/dashboard`
-								: import.meta.env.VITE_SERVER_URL
-						}
-					>
-						<IconCapLogoFullDark class="hidden dark:block" />
-						<IconCapLogoFull class="block dark:hidden" />
-					</a>
-					<RecordingQualitySettings />
-				</div>
+				<a
+					class="*:w-[92px] *:h-auto text-[--text-primary]"
+					target="_blank"
+					href={
+						auth.data
+							? `${import.meta.env.VITE_SERVER_URL}/dashboard`
+							: import.meta.env.VITE_SERVER_URL
+					}
+				>
+					<IconCapLogoFullDark class="hidden dark:block" />
+					<IconCapLogoFull class="block dark:hidden" />
+				</a>
 			</div>
+			<RecordingQualitySettings />
 			<div>
 				<AreaSelectButton
 					screen={options.screen()}
@@ -1080,41 +1079,47 @@ function ChangelogButton() {
 	);
 }
 
-const BPP_OPTIONS = [
-	{ label: "0.5x", value: 0.6 },
-	{ label: "1x", value: 1.2 },
-	{ label: "2x", value: 2.4 },
+const PRESET_OPTIONS = [
+	{ label: "Lossless", value: "lossless" },
+	{ label: "Slow", value: "slow" },
+	{ label: "Medium", value: "medium" },
+	{ label: "Fast", value: "ultrafast" },
 ] as const;
 
-const PRESET_OPTIONS = [
-	{ label: "Fast", value: "ultrafast" },
-	{ label: "Medium", value: "medium" },
-	{ label: "Slow", value: "slow" },
+const ENCODER_OPTIONS = [
+	{ label: "Auto (Hardware)", value: undefined },
+	{ label: "Software (libx264)", value: "software" },
+	{ label: "NVIDIA (NVENC)", value: "nvenc" },
+	{ label: "AMD (AMF)", value: "amf" },
+	{ label: "Intel (QuickSync)", value: "qsv" },
 ] as const;
 
 function RecordingQualitySettings() {
 	const { rawOptions, setOptions } = useRecordingOptions();
+	const isLossless = () => rawOptions.recordingPreset === "lossless";
 
 	return (
-		<div class="flex items-center gap-1.5 text-xs">
-			<Tooltip content="Recording quality multiplier">
+		<div class="flex flex-col gap-2 text-xs w-full px-1">
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-gray-11 text-xs whitespace-nowrap min-w-[4.5rem]">Encoder:</span>
 				<select
-					value={rawOptions.recordingBpp ?? 1.2}
-					onChange={(e) => setOptions("recordingBpp", Number.parseFloat(e.currentTarget.value))}
-					class="px-1.5 py-0.5 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
+					value={rawOptions.encoderType ?? ""}
+					onChange={(e) => setOptions("encoderType", e.currentTarget.value || undefined)}
+					class="flex-1 px-2 py-1 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
 				>
-					<For each={BPP_OPTIONS}>
+					<For each={ENCODER_OPTIONS}>
 						{(option) => (
-							<option value={option.value}>{option.label}</option>
+							<option value={option.value ?? ""}>{option.label}</option>
 						)}
 					</For>
 				</select>
-			</Tooltip>
-			<Tooltip content="Encoding speed vs quality">
+			</div>
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-gray-11 text-xs whitespace-nowrap min-w-[4.5rem]">Preset:</span>
 				<select
 					value={rawOptions.recordingPreset ?? "medium"}
-					onChange={(e) => setOptions("recordingPreset", e.currentTarget.value as "slow" | "medium" | "ultrafast")}
-					class="px-1.5 py-0.5 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
+					onChange={(e) => setOptions("recordingPreset", e.currentTarget.value as "lossless" | "slow" | "medium" | "ultrafast")}
+					class="flex-1 px-2 py-1 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
 				>
 					<For each={PRESET_OPTIONS}>
 						{(option) => (
@@ -1122,7 +1127,24 @@ function RecordingQualitySettings() {
 						)}
 					</For>
 				</select>
-			</Tooltip>
+			</div>
+			<div class="flex items-center justify-between gap-2" classList={{ "opacity-50": isLossless() }}>
+				<span class="text-gray-11 text-xs whitespace-nowrap min-w-[4.5rem]">Quality:</span>
+				<div class="flex items-center gap-2 flex-1">
+					<input
+						type="range"
+						min="0"
+						max="100"
+						value={rawOptions.recordingQualityPercent ?? 50}
+						onInput={(e) => setOptions("recordingQualityPercent", Number.parseFloat(e.currentTarget.value))}
+						disabled={isLossless()}
+						class="flex-1 h-1 bg-gray-6 rounded-lg appearance-none cursor-pointer accent-gray-11 disabled:cursor-not-allowed disabled:opacity-50"
+					/>
+					<span class="text-xs text-gray-12 min-w-[3ch] text-right font-mono">
+						{isLossless() ? "∞" : `${rawOptions.recordingQualityPercent ?? 50}%`}
+					</span>
+				</div>
+			</div>
 		</div>
 	);
 }

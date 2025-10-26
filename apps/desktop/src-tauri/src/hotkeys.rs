@@ -49,15 +49,12 @@ impl From<Hotkey> for Shortcut {
 #[allow(clippy::enum_variant_names)]
 pub enum HotkeyAction {
     StartStudioRecording,
-    StartInstantRecording,
     StopRecording,
     RestartRecording,
-    // TakeScreenshot,
     OpenRecordingPicker,
     OpenRecordingPickerDisplay,
     OpenRecordingPickerWindow,
     OpenRecordingPickerArea,
-    // Needed for deserialization of deprecated actions
     #[serde(other)]
     Other,
 }
@@ -135,13 +132,6 @@ async fn handle_hotkey(app: AppHandle, action: HotkeyAction) -> Result<(), Strin
         HotkeyAction::StartStudioRecording => {
             let _ = RequestStartRecording {
                 mode: cap_recording::RecordingMode::Studio,
-            }
-            .emit(&app);
-            Ok(())
-        }
-        HotkeyAction::StartInstantRecording => {
-            let _ = RequestStartRecording {
-                mode: cap_recording::RecordingMode::Instant,
             }
             .emit(&app);
             Ok(())

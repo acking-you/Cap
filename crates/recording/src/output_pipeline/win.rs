@@ -32,6 +32,7 @@ pub struct WindowsMuxerConfig {
     pub frame_rate: u32,
     pub bitrate_multiplier: f32,
     pub output_size: Option<SizeInt32>,
+    pub encoder_type: Option<String>,
 }
 
 impl Muxer for WindowsMuxer {
@@ -71,58 +72,33 @@ impl Muxer for WindowsMuxer {
             tasks.spawn_thread("windows-encoder", move || {
                 cap_mediafoundation_utils::thread_init();
 
+                let encoder_type = config.encoder_type.as_deref().unwrap_or("auto");
+                let encoder_type_enum = cap_enc_ffmpeg::H264EncoderType::from_str(encoder_type);
+                info!("Encoder selection mode: {} ({:?})", encoder_type, encoder_type_enum);
+
                 let encoder = (|| {
                     let mut output = output.lock().unwrap();
 
-                    let native_encoder =
-                        cap_enc_mediafoundation::H264Encoder::new_with_scaled_output(
-                            &config.d3d_device,
-                            config.pixel_format,
-                            input_size,
-                            output_size,
-                            config.frame_rate,
-                            config.bitrate_multiplier,
-                        );
+                    let fallback_width = if output_size.Width > 0 {
+                        output_size.Width as u32
+                    } else {
+                        video_config.width
+                    };
+                    let fallback_height = if output_size.Height > 0 {
+                        output_size.Height as u32
+                    } else {
+                        video_config.height
+                    };
 
-                    match native_encoder {
-                        Ok(encoder) => cap_mediafoundation_ffmpeg::H264StreamMuxer::new(
-                            &mut output,
-                            cap_mediafoundation_ffmpeg::MuxerConfig {
-                                width: output_size.Width as u32,
-                                height: output_size.Height as u32,
-                                fps: config.frame_rate,
-                                bitrate: encoder.bitrate(),
-                            },
-                        )
-                        .map(|muxer| either::Left((encoder, muxer)))
-                        .map_err(|e| anyhow!("{e}")),
-                        Err(e) => {
-                            use tracing::{error, info};
-
-                            error!("Failed to create native encoder: {e}");
-                            info!("Falling back to software H264 encoder");
-
-                            let fallback_width = if output_size.Width > 0 {
-                                output_size.Width as u32
-                            } else {
-                                video_config.width
-                            };
-                            let fallback_height = if output_size.Height > 0 {
-                                output_size.Height as u32
-                            } else {
-                                video_config.height
-                            };
-
-                            cap_enc_ffmpeg::H264Encoder::builder(video_config)
-                                .with_output_size(fallback_width, fallback_height)
-                                .and_then(|builder| builder.build(&mut output))
-                                .map(either::Right)
-                                .map_err(|e| anyhow!("ScreenSoftwareEncoder/{e}"))
-                        }
-                    }
+                    // Use FFmpeg encoder with auto hardware detection or user choice
+                    cap_enc_ffmpeg::H264Encoder::builder(video_config)
+                        .with_encoder_type(encoder_type_enum)
+                        .with_output_size(fallback_width, fallback_height)
+                        .and_then(|builder| builder.build(&mut output))
+                        .map_err(|e| anyhow!("H264Encoder/{e}"))
                 })();
 
-                let encoder = match encoder {
+                let mut encoder = match encoder {
                     Ok(encoder) => {
                         if ready_tx.send(Ok(())).is_err() {
                             error!("Failed to send ready signal - receiver dropped");
@@ -137,66 +113,25 @@ impl Muxer for WindowsMuxer {
                     }
                 };
 
-                match encoder {
-                    either::Left((mut encoder, mut muxer)) => {
-                        trace!("Running native encoder");
-                        let mut first_timestamp = None;
-                        encoder
-                            .run(
-                                Arc::new(AtomicBool::default()),
-                                || {
-                                    let Ok(Some((frame, _))) = video_rx.recv() else {
-                                        trace!("No more frames available");
-                                        return Ok(None);
-                                    };
+                // Process frames with FFmpeg encoder
+                while let Ok(Some((frame, time))) = video_rx.recv() {
+                    let Ok(mut output) = output.lock() else {
+                        continue;
+                    };
 
-                                    let frame_time = frame.inner().SystemRelativeTime()?;
-                                    let first_timestamp = first_timestamp.get_or_insert(frame_time);
-                                    let frame_time = TimeSpan {
-                                        Duration: frame_time.Duration - first_timestamp.Duration,
-                                    };
+                    use scap_ffmpeg::AsFFmpeg;
 
-                                    Ok(Some((frame.texture().clone(), frame_time)))
-                                },
-                                |output_sample| {
-                                    let mut output = output.lock().unwrap();
-
-                                    let _ = muxer
-                                        .write_sample(&output_sample, &mut *output)
-                                        .map_err(|e| format!("WriteSample: {e}"));
-
-                                    Ok(())
-                                },
-                            )
-                            .context("run native encoder")
-                    }
-                    either::Right(mut encoder) => {
-                        while let Ok(Some((frame, time))) = video_rx.recv() {
-                            let Ok(mut output) = output.lock() else {
-                                continue;
-                            };
-
-                            // if pause_flag.load(std::sync::atomic::Ordering::Relaxed) {
-                            //     mp4.pause();
-                            // } else {
-                            //     mp4.resume();
-                            // }
-
-                            use scap_ffmpeg::AsFFmpeg;
-
-                            frame
-                                .as_ffmpeg()
-                                .context("frame as_ffmpeg")
-                                .and_then(|frame| {
-                                    encoder
-                                        .queue_frame(frame, time, &mut output)
-                                        .context("queue_frame")
-                                })?;
-                        }
-
-                        Ok(())
-                    }
+                    frame
+                        .as_ffmpeg()
+                        .context("frame as_ffmpeg")
+                        .and_then(|frame| {
+                            encoder
+                                .queue_frame(frame, time, &mut output)
+                                .context("queue_frame")
+                        })?;
                 }
+
+                Ok(())
             });
         }
 

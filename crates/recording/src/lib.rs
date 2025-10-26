@@ -2,7 +2,6 @@ mod audio_buffer;
 mod capture_pipeline;
 pub mod cursor;
 pub mod feeds;
-pub mod instant_recording;
 mod output_pipeline;
 pub mod sources;
 pub mod studio_recording;
@@ -25,7 +24,6 @@ use crate::{feeds::camera::CameraFeedLock, sources::screen_capture::ScreenCaptur
 pub enum RecordingMode {
     #[default]
     Studio,
-    Instant,
 }
 
 #[derive(specta::Type, Serialize, Deserialize, Clone, Debug)]

@@ -8,7 +8,7 @@ use ffmpeg::{
     frame,
     threading::Config,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::base::EncoderBase;
 
@@ -19,11 +19,49 @@ fn is_420(format: ffmpeg::format::Pixel) -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum H264EncoderType {
+    Auto,
+    Software,
+    Nvenc,
+}
+
+impl H264EncoderType {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "software" | "libx264" => Self::Software,
+            "nvenc" | "h264_nvenc" => Self::Nvenc,
+            "auto" | _ => Self::Auto,
+        }
+    }
+
+    pub fn encoder_name(&self) -> &'static str {
+        match self {
+            Self::Software => "libx264",
+            Self::Nvenc => "h264_nvenc",
+            Self::Auto => "auto",
+        }
+    }
+}
+
+fn detect_best_encoder() -> H264EncoderType {
+    // Try hardware encoders first
+    if encoder::find_by_name("h264_nvenc").is_some() {
+        info!("Detected NVENC hardware encoder");
+        return H264EncoderType::Nvenc;
+    }
+
+    // Fallback to software
+    info!("No hardware encoder detected, using software encoder");
+    H264EncoderType::Software
+}
+
 pub struct H264EncoderBuilder {
     bpp: f32,
     input_config: VideoInfo,
     preset: H264Preset,
     output_size: Option<(u32, u32)>,
+    encoder_type: H264EncoderType,
 }
 
 #[derive(Clone, Copy)]
@@ -54,6 +92,7 @@ impl H264EncoderBuilder {
             bpp: Self::QUALITY_BPP,
             preset: H264Preset::Medium,
             output_size: None,
+            encoder_type: H264EncoderType::Auto,
         }
     }
 
@@ -64,6 +103,11 @@ impl H264EncoderBuilder {
 
     pub fn with_bpp(mut self, bpp: f32) -> Self {
         self.bpp = bpp;
+        self
+    }
+
+    pub fn with_encoder_type(mut self, encoder_type: H264EncoderType) -> Self {
+        self.encoder_type = encoder_type;
         self
     }
 
@@ -81,7 +125,17 @@ impl H264EncoderBuilder {
         output: &mut format::context::Output,
     ) -> Result<H264Encoder, H264EncoderError> {
         let input_config = self.input_config;
-        let (codec, encoder_options) = get_codec_and_options(&input_config, self.preset)
+
+        // Resolve encoder type
+        let encoder_type = if self.encoder_type == H264EncoderType::Auto {
+            detect_best_encoder()
+        } else {
+            self.encoder_type
+        };
+
+        info!("Using H264 encoder: {:?}", encoder_type);
+
+        let (codec, encoder_options) = get_codec_and_options(&input_config, self.preset, encoder_type)
             .ok_or(H264EncoderError::CodecNotFound)?;
 
         let (output_width, output_height) = self
@@ -275,47 +329,54 @@ impl H264Encoder {
 fn get_codec_and_options(
     config: &VideoInfo,
     preset: H264Preset,
+    encoder_type: H264EncoderType,
 ) -> Option<(Codec, Dictionary<'_>)> {
-    let encoder_name = {
-        // if cfg!(target_os = "macos") {
-        //     "libx264"
-        //     // looks terrible rn :(
-        //     // "h264_videotoolbox"
-        // } else {
-        //     "libx264"
-        // }
-
-        "libx264"
+    let encoder_name = match encoder_type {
+        H264EncoderType::Software => "libx264",
+        H264EncoderType::Nvenc => "h264_nvenc",
+        H264EncoderType::Auto => unreachable!("Auto should be resolved before calling this function"),
     };
 
     if let Some(codec) = encoder::find_by_name(encoder_name) {
         let mut options = Dictionary::new();
 
-        if encoder_name == "h264_videotoolbox" {
-            options.set("realtime", "true");
-        } else if encoder_name == "libx264" {
-            let keyframe_interval_secs = 2;
-            let keyframe_interval = keyframe_interval_secs * config.frame_rate.numerator();
-            let keyframe_interval_str = keyframe_interval.to_string();
+        let keyframe_interval_secs = 2;
+        let keyframe_interval = keyframe_interval_secs * config.frame_rate.numerator();
+        let keyframe_interval_str = keyframe_interval.to_string();
 
-            options.set(
-                "preset",
-                match preset {
-                    H264Preset::Slow => "slow",
-                    H264Preset::Medium => "medium",
-                    H264Preset::Ultrafast => "ultrafast",
-                },
-            );
-            if let H264Preset::Ultrafast = preset {
-                options.set("tune", "zerolatency");
+        match encoder_type {
+            H264EncoderType::Software => {
+                options.set(
+                    "preset",
+                    match preset {
+                        H264Preset::Slow => "slow",
+                        H264Preset::Medium => "medium",
+                        H264Preset::Ultrafast => "ultrafast",
+                    },
+                );
+                if let H264Preset::Ultrafast = preset {
+                    options.set("tune", "zerolatency");
+                }
+                options.set("vsync", "1");
+                options.set("g", &keyframe_interval_str);
+                options.set("keyint_min", &keyframe_interval_str);
             }
-            options.set("vsync", "1");
-            options.set("g", &keyframe_interval_str);
-            options.set("keyint_min", &keyframe_interval_str);
-        } else if encoder_name == "h264_mf" {
-            options.set("hw_encoding", "true");
-            options.set("scenario", "4");
-            options.set("quality", "1");
+            H264EncoderType::Nvenc => {
+                // Only use tested and working parameters
+                options.set("async_depth", "8");
+                options.set("delay", "0");
+                options.set("gpu", "0");
+                options.set("g", &keyframe_interval_str);
+
+                // Set preset based on quality preference
+                let nvenc_preset = match preset {
+                    H264Preset::Slow => "p7",      // High quality
+                    H264Preset::Medium => "p4",    // Balanced
+                    H264Preset::Ultrafast => "p1", // Fast
+                };
+                options.set("preset", nvenc_preset);
+            }
+            H264EncoderType::Auto => unreachable!(),
         }
 
         return Some((codec, options));
