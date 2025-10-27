@@ -47,7 +47,7 @@ import {
 function getWindowSize() {
 	return {
 		width: 300,
-		height: 420,
+		height: 480,
 	};
 }
 
@@ -205,8 +205,7 @@ function Page() {
 							const screen = options.screen();
 							if (!screen)
 								throw new Error(
-									`No screen found. Number of available screens: ${
-										_screens()?.length
+									`No screen found. Number of available screens: ${_screens()?.length
 									}`,
 								);
 							return { variant: "display", id: screen.id };
@@ -215,8 +214,7 @@ function Page() {
 							const win = options.window();
 							if (!win)
 								throw new Error(
-									`No window found. Number of available windows: ${
-										_windows()?.length
+									`No window found. Number of available windows: ${_windows()?.length
 									}`,
 								);
 							return { variant: "window", id: win.id };
@@ -225,8 +223,7 @@ function Page() {
 							const screen = options.screen();
 							if (!screen)
 								throw new Error(
-									`No screen found. Number of available screens: ${
-										_screens()?.length
+									`No screen found. Number of available screens: ${_screens()?.length
 									}`,
 								);
 							return {
@@ -356,7 +353,7 @@ function Page() {
 						"flex flex-row items-center rounded-[0.5rem] relative border h-8 transition-all duration-500",
 						(rawOptions.captureTarget.variant === "display" ||
 							rawOptions.captureTarget.variant === "area") &&
-							"ml-[2.4rem]",
+						"ml-[2.4rem]",
 					)}
 					style={{
 						"transition-timing-function":
@@ -668,7 +665,7 @@ function AreaSelectButton(props: {
 								class={cx(
 									"w-[1rem] h-[1rem]",
 									areaSelection.pending &&
-										"animate-gentle-bounce duration-1000 text-gray-12 mt-1",
+									"animate-gentle-bounce duration-1000 text-gray-12 mt-1",
 								)}
 							/>
 						</button>

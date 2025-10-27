@@ -19,25 +19,37 @@ pub enum ExportCompression {
     Social,
     Web,
     Potato,
+    H264Lossless,
+    H265Lossless,
 }
 
 impl ExportCompression {
-    pub fn bits_per_pixel(&self) -> f32 {
+    pub fn bits_per_pixel(&self) -> Option<f32> {
         match self {
-            Self::NearLossless => 2.0,
-            Self::HighQuality => 0.8,
-            Self::Minimal => 0.5,
-            Self::Social => 0.15,
-            Self::Web => 0.08,
-            Self::Potato => 0.04,
+            Self::NearLossless => Some(2.0),
+            Self::HighQuality => Some(0.8),
+            Self::Minimal => Some(0.5),
+            Self::Social => Some(0.15),
+            Self::Web => Some(0.08),
+            Self::Potato => Some(0.04),
+            Self::H264Lossless | Self::H265Lossless => None,
         }
     }
 
     pub fn preset(&self) -> H264Preset {
         match self {
+            Self::H264Lossless | Self::H265Lossless => H264Preset::Lossless,
             Self::NearLossless | Self::HighQuality => H264Preset::Slow,
             Self::Minimal => H264Preset::Medium,
             _ => H264Preset::Ultrafast,
+        }
+    }
+
+    pub fn encoder_type(&self) -> Option<cap_enc_ffmpeg::H264EncoderType> {
+        match self {
+            Self::H264Lossless => Some(cap_enc_ffmpeg::H264EncoderType::Software),
+            Self::H265Lossless => Some(cap_enc_ffmpeg::H264EncoderType::Nvenc),
+            _ => Some(cap_enc_ffmpeg::H264EncoderType::Auto),
         }
     }
 }
@@ -91,10 +103,29 @@ impl Mp4ExportSettings {
                 "output",
                 base.output_path.clone(),
                 |o| {
-                    H264Encoder::builder(video_info)
-                        .with_bpp(self.compression.bits_per_pixel())
-                        .with_preset(self.compression.preset())
-                        .build(o)
+                    let mut builder = H264Encoder::builder(video_info);
+
+                    if let Some(bpp) = self.compression.bits_per_pixel() {
+                        builder = builder.with_bpp(bpp);
+                    }
+
+                    builder = builder.with_preset(self.compression.preset());
+
+                    if let Some(encoder_type) = self.compression.encoder_type() {
+                        builder = builder.with_encoder_type(encoder_type);
+                    }
+
+                    let result = builder.build(o);
+
+                    if result.is_err() && matches!(self.compression, ExportCompression::H265Lossless) {
+                        warn!("NVENC not available, falling back to H.264 software lossless");
+                        let fallback_builder = H264Encoder::builder(video_info)
+                            .with_preset(H264Preset::Lossless)
+                            .with_encoder_type(cap_enc_ffmpeg::H264EncoderType::Software);
+                        return fallback_builder.build(o);
+                    }
+
+                    result
                 },
                 |o| {
                     has_audio.then(|| {
@@ -110,13 +141,13 @@ impl Mp4ExportSettings {
 
             let mut encoded_frames = 0;
             while let Ok(frame) = frame_rx.recv() {
-                encoder.queue_video_frame(
+                let _ = encoder.queue_video_frame(
                     frame.video,
                     Duration::from_secs_f32(encoded_frames as f32 / fps as f32),
                 );
                 encoded_frames += 1;
                 if let Some(audio) = frame.audio {
-                    encoder.queue_audio_frame(audio);
+                    let _ = encoder.queue_audio_frame(audio);
                 }
             }
 

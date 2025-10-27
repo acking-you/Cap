@@ -48,6 +48,8 @@ export const COMPRESSION_OPTIONS: Array<{
 	label: string;
 	value: ExportCompression;
 }> = [
+	{ label: "H.265 Lossless (GPU)", value: "H265Lossless" },
+	{ label: "H.264 Lossless (CPU)", value: "H264Lossless" },
 	{ label: "Near-Lossless", value: "NearLossless" },
 	{ label: "High Quality", value: "HighQuality" },
 	{ label: "Minimal", value: "Minimal" },
@@ -61,6 +63,12 @@ export const FPS_OPTIONS = [
 	{ label: "15 FPS", value: 15 },
 	{ label: "30 FPS", value: 30 },
 	{ label: "60 FPS", value: 60 },
+	{ label: "90 FPS", value: 90 },
+	{ label: "120 FPS", value: 120 },
+	{ label: "144 FPS", value: 144 },
+	{ label: "165 FPS", value: 165 },
+	{ label: "180 FPS", value: 180 },
+	{ label: "240 FPS", value: 240 },
 ] satisfies Array<{ label: string; value: number }>;
 
 export const GIF_FPS_OPTIONS = [
