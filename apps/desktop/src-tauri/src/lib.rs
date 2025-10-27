@@ -2317,8 +2317,14 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
                         }),
                         capture_system_audio: settings.system_audio,
                         mode: event.mode,
-                        recording_bpp: Some(1.2),
-                        recording_preset: Some("medium".to_string()),
+                        recording_bpp: if settings.recording_preset.as_deref() == Some("lossless") {
+                            None
+                        } else {
+                            settings.recording_bpp.or(Some(1.2))
+                        },
+                        recording_preset: settings.recording_preset.or(Some("medium".to_string())),
+                        encoder_type: settings.encoder_type,
+                        recording_fps: settings.recording_fps,
                     },
                 )
                 .await;

@@ -119,6 +119,12 @@ impl DeepLinkAction {
                 crate::set_camera_input(app.clone(), state.clone(), camera).await?;
                 crate::set_mic_input(state.clone(), mic_label).await?;
 
+                // Read user settings for encoder and fps preferences
+                let settings = crate::RecordingSettingsStore::get(app)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+
                 let capture_target: ScreenCaptureTarget = match capture_mode {
                     CaptureMode::Screen(name) => cap_recording::screen_capture::list_displays()
                         .into_iter()
@@ -136,8 +142,14 @@ impl DeepLinkAction {
                     capture_target,
                     capture_system_audio,
                     mode,
-                    recording_bpp: Some(1.2),
-                    recording_preset: Some("medium".to_string()),
+                    recording_bpp: if settings.recording_preset.as_deref() == Some("lossless") {
+                        None
+                    } else {
+                        settings.recording_bpp.or(Some(1.2))
+                    },
+                    recording_preset: settings.recording_preset.or(Some("medium".to_string())),
+                    encoder_type: settings.encoder_type,
+                    recording_fps: settings.recording_fps,
                 };
 
                 crate::recording::start_recording(app.clone(), state, inputs)

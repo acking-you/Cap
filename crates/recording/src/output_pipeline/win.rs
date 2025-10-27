@@ -33,6 +33,7 @@ pub struct WindowsMuxerConfig {
     pub bitrate_multiplier: f32,
     pub output_size: Option<SizeInt32>,
     pub encoder_type: Option<String>,
+    pub preset: Option<String>,
 }
 
 impl Muxer for WindowsMuxer {
@@ -76,6 +77,12 @@ impl Muxer for WindowsMuxer {
                 let encoder_type_enum = cap_enc_ffmpeg::H264EncoderType::from_str(encoder_type);
                 info!("Encoder selection mode: {} ({:?})", encoder_type, encoder_type_enum);
 
+                let preset = config.preset.as_deref().unwrap_or("medium");
+                let preset_enum = cap_enc_ffmpeg::H264Preset::from_str(preset);
+                info!("Encoder preset: {} ({:?})", preset, preset_enum);
+
+                let bitrate_multiplier = config.bitrate_multiplier;
+
                 let encoder = (|| {
                     let mut output = output.lock().unwrap();
 
@@ -93,6 +100,8 @@ impl Muxer for WindowsMuxer {
                     // Use FFmpeg encoder with auto hardware detection or user choice
                     cap_enc_ffmpeg::H264Encoder::builder(video_config)
                         .with_encoder_type(encoder_type_enum)
+                        .with_preset(preset_enum)
+                        .with_bpp(bitrate_multiplier)
                         .with_output_size(fallback_width, fallback_height)
                         .and_then(|builder| builder.build(&mut output))
                         .map_err(|e| anyhow!("H264Encoder/{e}"))

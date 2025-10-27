@@ -180,6 +180,10 @@ pub struct StartRecordingInputs {
     pub recording_bpp: Option<f32>,
     #[serde(default)]
     pub recording_preset: Option<String>,
+    #[serde(default)]
+    pub encoder_type: Option<String>,
+    #[serde(default)]
+    pub recording_fps: Option<u32>,
 }
 
 fn default_recording_bpp() -> Option<f32> {
@@ -331,7 +335,7 @@ pub async fn start_recording(
     debug!("spawning start_recording actor");
 
     // done in spawn to catch panics just in case
-    let app_handle = app.clone();
+    let _app_handle = app.clone();
     let spawn_actor_res = async {
         spawn_actor({
             let state_mtx = Arc::clone(&state_mtx);
@@ -388,6 +392,14 @@ pub async fn start_recording(
                         .unwrap_or_default(),
                 )
                 .with_recording_quality(inputs.recording_bpp, inputs.recording_preset.clone());
+
+                if let Some(encoder_type) = inputs.encoder_type.clone() {
+                    builder = builder.with_encoder_type(Some(encoder_type));
+                }
+
+                if let Some(recording_fps) = inputs.recording_fps {
+                    builder = builder.with_recording_fps(recording_fps);
+                }
 
                 #[cfg(target_os = "macos")]
                 {

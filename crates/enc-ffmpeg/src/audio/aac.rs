@@ -7,6 +7,7 @@ use ffmpeg::{
     frame,
     threading::Config,
 };
+use tracing::info;
 
 use crate::{
     AudioEncoder,
@@ -44,6 +45,10 @@ impl AACEncoder {
         output: &mut format::context::Output,
     ) -> Result<Self, AACEncoderError> {
         let codec = encoder::find_by_name("aac").ok_or(AACEncoderError::CodecNotFound)?;
+
+        info!("FFmpeg AAC encoder initialization");
+        info!("  Codec: {}", codec.name());
+
         let mut encoder_ctx = context::Context::new_with_codec(codec);
         let thread_count = thread::available_parallelism()
             .map(|v| v.get())
@@ -83,6 +88,15 @@ impl AACEncoder {
         encoder.set_format(output_config.sample_format);
         encoder.set_channel_layout(output_config.channel_layout());
         encoder.set_time_base(FFRational(1, output_config.rate()));
+
+        info!("FFmpeg AAC encoder audio configuration:");
+        info!("  Input sample rate: {} Hz", input_config.rate());
+        info!("  Output sample rate: {} Hz", rate);
+        info!("  Sample format: {:?}", output_config.sample_format);
+        info!("  Channel layout: {:?}", output_config.channel_layout());
+        info!("  Bitrate: {} bps ({} kbps)", Self::OUTPUT_BITRATE, Self::OUTPUT_BITRATE / 1000);
+        info!("  Thread count: {}", thread_count);
+        info!("  Time base: 1/{}", output_config.rate());
 
         let encoder = encoder.open()?;
 

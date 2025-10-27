@@ -64,11 +64,24 @@ pub struct H264EncoderBuilder {
     encoder_type: H264EncoderType,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum H264Preset {
+    Lossless,
     Slow,
     Medium,
     Ultrafast,
+}
+
+impl H264Preset {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "lossless" => Self::Lossless,
+            "slow" => Self::Slow,
+            "medium" => Self::Medium,
+            "ultrafast" => Self::Ultrafast,
+            _ => Self::Medium,
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -137,6 +150,15 @@ impl H264EncoderBuilder {
 
         let (codec, encoder_options) = get_codec_and_options(&input_config, self.preset, encoder_type)
             .ok_or(H264EncoderError::CodecNotFound)?;
+
+        info!("FFmpeg encoder codec: {}", codec.name());
+        info!("FFmpeg encoder preset: {:?}", self.preset);
+
+        // Log all encoder options
+        info!("FFmpeg encoder options:");
+        for (key, value) in encoder_options.iter() {
+            info!("  {} = {}", key, value);
+        }
 
         let (output_width, output_height) = self
             .output_size
@@ -237,16 +259,33 @@ impl H264EncoderBuilder {
         encoder.set_time_base(input_config.time_base);
         encoder.set_frame_rate(Some(input_config.frame_rate));
 
-        // let target_bitrate = compression.bitrate();
-        let bitrate = get_bitrate(
-            output_width,
-            output_height,
-            input_config.frame_rate.0 as f32 / input_config.frame_rate.1 as f32,
-            self.bpp,
+        info!("FFmpeg encoder video configuration:");
+        info!("  Resolution: {}x{}", output_width, output_height);
+        info!("  Pixel format: {:?}", output_format);
+        info!("  Time base: {}/{}", input_config.time_base.0, input_config.time_base.1);
+        info!("  Frame rate: {}/{} ({:.2} fps)",
+            input_config.frame_rate.0,
+            input_config.frame_rate.1,
+            input_config.frame_rate.0 as f32 / input_config.frame_rate.1 as f32
         );
+        info!("  Thread count: {}", thread_count);
 
-        encoder.set_bit_rate(bitrate);
-        encoder.set_max_bit_rate(bitrate);
+        // For lossless mode (qp=0), don't set bitrate as it would conflict with qp
+        if !matches!(self.preset, H264Preset::Lossless) {
+            let bitrate = get_bitrate(
+                output_width,
+                output_height,
+                input_config.frame_rate.0 as f32 / input_config.frame_rate.1 as f32,
+                self.bpp,
+            );
+
+            encoder.set_bit_rate(bitrate);
+            encoder.set_max_bit_rate(bitrate);
+            info!("  Bitrate: {} bps ({:.2} Mbps)", bitrate, bitrate as f64 / 1_000_000.0);
+            info!("  BPP multiplier: {:.2}", self.bpp);
+        } else {
+            info!("  Bitrate: Not set (lossless mode with qp=0)");
+        }
 
         let encoder = encoder.open_with(encoder_options)?;
 
@@ -331,10 +370,14 @@ fn get_codec_and_options(
     preset: H264Preset,
     encoder_type: H264EncoderType,
 ) -> Option<(Codec, Dictionary<'_>)> {
-    let encoder_name = match encoder_type {
-        H264EncoderType::Software => "libx264",
-        H264EncoderType::Nvenc => "h264_nvenc",
-        H264EncoderType::Auto => unreachable!("Auto should be resolved before calling this function"),
+    let (encoder_name, is_hevc) = match (encoder_type, preset) {
+        (H264EncoderType::Nvenc, H264Preset::Lossless) => {
+            info!("Using HEVC for NVENC lossless encoding (h264_nvenc has white screen issue)");
+            ("hevc_nvenc", true)
+        }
+        (H264EncoderType::Software, _) => ("libx264", false),
+        (H264EncoderType::Nvenc, _) => ("h264_nvenc", false),
+        (H264EncoderType::Auto, _) => unreachable!("Auto should be resolved before calling this function"),
     };
 
     if let Some(codec) = encoder::find_by_name(encoder_name) {
@@ -344,39 +387,62 @@ fn get_codec_and_options(
         let keyframe_interval = keyframe_interval_secs * config.frame_rate.numerator();
         let keyframe_interval_str = keyframe_interval.to_string();
 
-        match encoder_type {
-            H264EncoderType::Software => {
-                options.set(
-                    "preset",
-                    match preset {
-                        H264Preset::Slow => "slow",
-                        H264Preset::Medium => "medium",
-                        H264Preset::Ultrafast => "ultrafast",
-                    },
-                );
-                if let H264Preset::Ultrafast = preset {
-                    options.set("tune", "zerolatency");
+        match (encoder_type, is_hevc) {
+            (H264EncoderType::Software, _) => {
+                match preset {
+                    H264Preset::Lossless => {
+                        options.set("preset", "medium");
+                        options.set("qp", "0");
+                    }
+                    _ => {
+                        options.set(
+                            "preset",
+                            match preset {
+                                H264Preset::Slow => "slow",
+                                H264Preset::Medium => "medium",
+                                H264Preset::Ultrafast => "ultrafast",
+                                H264Preset::Lossless => unreachable!(),
+                            },
+                        );
+                        if let H264Preset::Ultrafast = preset {
+                            options.set("tune", "zerolatency");
+                        }
+                    }
                 }
                 options.set("vsync", "1");
                 options.set("g", &keyframe_interval_str);
                 options.set("keyint_min", &keyframe_interval_str);
             }
-            H264EncoderType::Nvenc => {
-                // Only use tested and working parameters
+            (H264EncoderType::Nvenc, true) => {
+                options.set("async_depth", "8");
+                options.set("delay", "0");
+                options.set("gpu", "0");
+                options.set("g", &keyframe_interval_str);
+                options.set("preset", "p7");
+                options.set("tune", "lossless");
+                options.set("rc", "constqp");
+                options.set("qp", "0");
+            }
+            (H264EncoderType::Nvenc, false) => {
                 options.set("async_depth", "8");
                 options.set("delay", "0");
                 options.set("gpu", "0");
                 options.set("g", &keyframe_interval_str);
 
-                // Set preset based on quality preference
-                let nvenc_preset = match preset {
-                    H264Preset::Slow => "p7",      // High quality
-                    H264Preset::Medium => "p4",    // Balanced
-                    H264Preset::Ultrafast => "p1", // Fast
-                };
-                options.set("preset", nvenc_preset);
+                match preset {
+                    H264Preset::Lossless => unreachable!(),
+                    _ => {
+                        let nvenc_preset = match preset {
+                            H264Preset::Slow => "p7",
+                            H264Preset::Medium => "p4",
+                            H264Preset::Ultrafast => "p1",
+                            H264Preset::Lossless => unreachable!(),
+                        };
+                        options.set("preset", nvenc_preset);
+                    }
+                }
             }
-            H264EncoderType::Auto => unreachable!(),
+            (H264EncoderType::Auto, _) => unreachable!(),
         }
 
         return Some((codec, options));

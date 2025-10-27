@@ -21,6 +21,10 @@ pub struct RecordingSettingsStore {
     pub camera_id: Option<DeviceOrModelID>,
     pub mode: Option<RecordingMode>,
     pub system_audio: bool,
+    pub encoder_type: Option<String>,
+    pub recording_fps: Option<u32>,
+    pub recording_preset: Option<String>,
+    pub recording_bpp: Option<f32>,
 }
 
 impl RecordingSettingsStore {

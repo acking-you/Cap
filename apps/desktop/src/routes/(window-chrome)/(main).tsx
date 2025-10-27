@@ -243,9 +243,10 @@ function Page() {
 						capture_target,
 						mode: payload.mode,
 						capture_system_audio: rawOptions.captureSystemAudio,
-						recording_quality_percent: rawOptions.recordingQualityPercent,
+						recording_bpp: rawOptions.recordingPreset === "lossless" ? undefined : (rawOptions.recordingQualityPercent ? Math.min(rawOptions.recordingQualityPercent / 100 * 2.4, 2.28) : undefined),
 						recording_preset: rawOptions.recordingPreset,
 						encoder_type: rawOptions.encoderType,
+						recording_fps: rawOptions.recordingFps === "auto" ? undefined : rawOptions.recordingFps,
 					}),
 					setOptions,
 				);
@@ -1094,6 +1095,16 @@ const ENCODER_OPTIONS = [
 	{ label: "Intel (QuickSync)", value: "qsv" },
 ] as const;
 
+const FPS_OPTIONS = [
+	{ label: "Auto (Screen Refresh Rate)", value: "auto" },
+	{ label: "30 FPS", value: 30 },
+	{ label: "60 FPS", value: 60 },
+	{ label: "90 FPS", value: 90 },
+	{ label: "120 FPS", value: 120 },
+	{ label: "150 FPS", value: 150 },
+	{ label: "180 FPS", value: 180 },
+] as const;
+
 function RecordingQualitySettings() {
 	const { rawOptions, setOptions } = useRecordingOptions();
 	const isLossless = () => rawOptions.recordingPreset === "lossless";
@@ -1122,6 +1133,23 @@ function RecordingQualitySettings() {
 					class="flex-1 px-2 py-1 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
 				>
 					<For each={PRESET_OPTIONS}>
+						{(option) => (
+							<option value={option.value}>{option.label}</option>
+						)}
+					</For>
+				</select>
+			</div>
+			<div class="flex items-center justify-between gap-2">
+				<span class="text-gray-11 text-xs whitespace-nowrap min-w-[4.5rem]">Frame Rate:</span>
+				<select
+					value={rawOptions.recordingFps ?? "auto"}
+					onChange={(e) => {
+						const value = e.currentTarget.value;
+						setOptions("recordingFps", value === "auto" ? "auto" : Number.parseInt(value));
+					}}
+					class="flex-1 px-2 py-1 text-xs rounded bg-gray-3 dark:bg-gray-2 text-gray-12 border border-gray-6 hover:border-gray-7 focus:border-gray-8 outline-none cursor-pointer"
+				>
+					<For each={FPS_OPTIONS}>
 						{(option) => (
 							<option value={option.value}>{option.label}</option>
 						)}

@@ -124,6 +124,7 @@ export function createOptionsQuery() {
 		recordingQualityPercent?: number;
 		recordingPreset?: "lossless" | "slow" | "medium" | "ultrafast";
 		encoderType?: string;
+		recordingFps?: number | "auto";
 		/** @deprecated */
 		cameraLabel: string | null;
 	}>({
@@ -134,6 +135,7 @@ export function createOptionsQuery() {
 		recordingQualityPercent: 50,
 		recordingPreset: "medium",
 		encoderType: undefined,
+		recordingFps: "auto",
 	});
 
 	createEventListener(window, "storage", (e) => {
@@ -147,6 +149,10 @@ export function createOptionsQuery() {
 			cameraId: _state.cameraID,
 			mode: _state.mode,
 			systemAudio: _state.captureSystemAudio,
+			encoderType: _state.encoderType,
+			recordingFps: typeof _state.recordingFps === "number" ? _state.recordingFps : undefined,
+			recordingPreset: _state.recordingPreset,
+			recordingBpp: _state.recordingQualityPercent ? Math.min(_state.recordingQualityPercent / 100 * 2.4, 2.28) : undefined,
 		});
 	});
 

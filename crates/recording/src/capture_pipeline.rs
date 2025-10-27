@@ -50,7 +50,7 @@ impl MakeCapturePipeline for screen_capture::Direct3DCapture {
         output_path: PathBuf,
         start_time: Timestamps,
         recording_bpp: Option<f32>,
-        _recording_preset: Option<String>,
+        recording_preset: Option<String>,
         encoder_type: Option<String>,
         recording_fps: u32,
     ) -> anyhow::Result<OutputPipeline> {
@@ -67,6 +67,7 @@ impl MakeCapturePipeline for screen_capture::Direct3DCapture {
                 frame_rate: recording_fps,
                 output_size: None,
                 encoder_type,
+                preset: recording_preset,
             })
             .await
     }
