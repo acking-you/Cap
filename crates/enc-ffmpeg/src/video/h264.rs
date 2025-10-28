@@ -62,6 +62,9 @@ pub struct H264EncoderBuilder {
     preset: H264Preset,
     output_size: Option<(u32, u32)>,
     encoder_type: H264EncoderType,
+    async_depth: Option<u32>,
+    delay: Option<i32>,
+    rc_lookahead: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -106,6 +109,9 @@ impl H264EncoderBuilder {
             preset: H264Preset::Medium,
             output_size: None,
             encoder_type: H264EncoderType::Auto,
+            async_depth: None,
+            delay: None,
+            rc_lookahead: None,
         }
     }
 
@@ -121,6 +127,21 @@ impl H264EncoderBuilder {
 
     pub fn with_encoder_type(mut self, encoder_type: H264EncoderType) -> Self {
         self.encoder_type = encoder_type;
+        self
+    }
+
+    pub fn with_async_depth(mut self, async_depth: u32) -> Self {
+        self.async_depth = Some(async_depth);
+        self
+    }
+
+    pub fn with_delay(mut self, delay: i32) -> Self {
+        self.delay = Some(delay);
+        self
+    }
+
+    pub fn with_rc_lookahead(mut self, rc_lookahead: u32) -> Self {
+        self.rc_lookahead = Some(rc_lookahead);
         self
     }
 
@@ -148,8 +169,22 @@ impl H264EncoderBuilder {
 
         info!("Using H264 encoder: {:?}", encoder_type);
 
-        let (codec, encoder_options) = get_codec_and_options(&input_config, self.preset, encoder_type)
-            .ok_or(H264EncoderError::CodecNotFound)?;
+        if matches!(encoder_type, H264EncoderType::Nvenc) {
+            info!("GPU Optimization Parameters:");
+            info!("  async_depth: {:?}", self.async_depth);
+            info!("  delay: {:?}", self.delay);
+            info!("  rc_lookahead: {:?}", self.rc_lookahead);
+        }
+
+        let (codec, encoder_options) = get_codec_and_options(
+            &input_config,
+            self.preset,
+            encoder_type,
+            self.async_depth,
+            self.delay,
+            self.rc_lookahead,
+        )
+        .ok_or(H264EncoderError::CodecNotFound)?;
 
         info!("FFmpeg encoder codec: {}", codec.name());
         info!("FFmpeg encoder preset: {:?}", self.preset);
@@ -369,6 +404,9 @@ fn get_codec_and_options(
     config: &VideoInfo,
     preset: H264Preset,
     encoder_type: H264EncoderType,
+    async_depth: Option<u32>,
+    delay: Option<i32>,
+    rc_lookahead: Option<u32>,
 ) -> Option<(Codec, Dictionary<'_>)> {
     let (encoder_name, is_hevc) = match (encoder_type, preset) {
         (H264EncoderType::Nvenc, H264Preset::Lossless) => {
@@ -414,18 +452,28 @@ fn get_codec_and_options(
                 options.set("keyint_min", &keyframe_interval_str);
             }
             (H264EncoderType::Nvenc, true) => {
-                options.set("async_depth", "8");
-                options.set("delay", "0");
+                let async_depth_value = async_depth.unwrap_or(8);
+                let delay_value = delay.unwrap_or(0);
+
+                options.set("async_depth", &async_depth_value.to_string());
+                options.set("delay", &delay_value.to_string());
                 options.set("gpu", "0");
                 options.set("g", &keyframe_interval_str);
                 options.set("preset", "p7");
                 options.set("tune", "lossless");
                 options.set("rc", "constqp");
                 options.set("qp", "0");
+
+                if let Some(lookahead) = rc_lookahead {
+                    options.set("rc-lookahead", &lookahead.to_string());
+                }
             }
             (H264EncoderType::Nvenc, false) => {
-                options.set("async_depth", "8");
-                options.set("delay", "0");
+                let async_depth_value = async_depth.unwrap_or(8);
+                let delay_value = delay.unwrap_or(0);
+
+                options.set("async_depth", &async_depth_value.to_string());
+                options.set("delay", &delay_value.to_string());
                 options.set("gpu", "0");
                 options.set("g", &keyframe_interval_str);
 
@@ -440,6 +488,10 @@ fn get_codec_and_options(
                         };
                         options.set("preset", nvenc_preset);
                     }
+                }
+
+                if let Some(lookahead) = rc_lookahead {
+                    options.set("rc-lookahead", &lookahead.to_string());
                 }
             }
             (H264EncoderType::Auto, _) => unreachable!(),

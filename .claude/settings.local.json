@@ -6,7 +6,8 @@
       "Bash(pnpm build:*)",
       "Bash(cargo check:*)",
       "Bash(cargo build:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(pnpm run:*)"
     ],
     "deny": [],
     "ask": []

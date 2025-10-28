@@ -71,6 +71,7 @@ declare global {
   const IconLucideEdit: typeof import('~icons/lucide/edit.jsx')['default']
   const IconLucideEye: typeof import('~icons/lucide/eye.jsx')['default']
   const IconLucideEyeOff: typeof import('~icons/lucide/eye-off.jsx')['default']
+  const IconLucideFileText: typeof import('~icons/lucide/file-text.jsx')['default']
   const IconLucideFolder: typeof import('~icons/lucide/folder.jsx')['default']
   const IconLucideGift: typeof import('~icons/lucide/gift.jsx')['default']
   const IconLucideHardDrive: typeof import('~icons/lucide/hard-drive.jsx')['default']

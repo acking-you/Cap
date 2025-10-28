@@ -272,6 +272,17 @@ function Page() {
 					dir={ostype() === "windows" ? "rtl" : "rtl"}
 					class="flex gap-1 items-center mx-2"
 				>
+					<Tooltip content={<span>Open Logs</span>}>
+						<button
+							type="button"
+							onClick={async () => {
+								await commands.openLogsDirectory();
+							}}
+							class="flex items-center justify-center w-5 h-5"
+						>
+							<IconLucideFileText class="text-gray-11 size-5 hover:text-gray-12" />
+						</button>
+					</Tooltip>
 					<Tooltip content={<span>Settings</span>}>
 						<button
 							type="button"

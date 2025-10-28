@@ -59,6 +59,12 @@ pub struct Mp4ExportSettings {
     pub fps: u32,
     pub resolution_base: XY<u32>,
     pub compression: ExportCompression,
+    #[serde(default)]
+    pub gpu_async_depth: Option<u32>,
+    #[serde(default)]
+    pub gpu_delay: Option<i32>,
+    #[serde(default)]
+    pub gpu_rc_lookahead: Option<u32>,
 }
 
 impl Mp4ExportSettings {
@@ -73,8 +79,13 @@ impl Mp4ExportSettings {
         info!("Exporting mp4 with settings: {:?}", &self);
         info!("Expected to render {} frames", base.total_frames(self.fps));
 
-        let (tx_image_data, mut video_rx) = tokio::sync::mpsc::channel::<(RenderedFrame, u32)>(8);
-        let (frame_tx, frame_rx) = std::sync::mpsc::sync_channel::<MP4Input>(8);
+        if self.gpu_async_depth.is_some() || self.gpu_delay.is_some() || self.gpu_rc_lookahead.is_some() {
+            info!("User GPU settings - async_depth: {:?}, delay: {:?}, rc_lookahead: {:?}",
+                self.gpu_async_depth, self.gpu_delay, self.gpu_rc_lookahead);
+        }
+
+        let (tx_image_data, mut video_rx) = tokio::sync::mpsc::channel::<(RenderedFrame, u32)>(64);
+        let (frame_tx, frame_rx) = std::sync::mpsc::sync_channel::<MP4Input>(64);
 
         let fps = self.fps;
 
@@ -113,6 +124,17 @@ impl Mp4ExportSettings {
 
                     if let Some(encoder_type) = self.compression.encoder_type() {
                         builder = builder.with_encoder_type(encoder_type);
+
+                        if matches!(encoder_type, cap_enc_ffmpeg::H264EncoderType::Nvenc) {
+                            let async_depth = self.gpu_async_depth.unwrap_or(32);
+                            let delay = self.gpu_delay.unwrap_or(4);
+                            let rc_lookahead = self.gpu_rc_lookahead.unwrap_or(16);
+
+                            builder = builder
+                                .with_async_depth(async_depth)
+                                .with_delay(delay)
+                                .with_rc_lookahead(rc_lookahead);
+                        }
                     }
 
                     let result = builder.build(o);

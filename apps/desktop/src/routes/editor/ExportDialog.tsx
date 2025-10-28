@@ -108,6 +108,10 @@ interface Settings {
 	exportTo: ExportToOption;
 	resolution: { label: string; value: string; width: number; height: number };
 	compression: ExportCompression;
+	gpuAsyncDepth: number;
+	gpuDelay: number;
+	gpuRcLookahead: number;
+	showAdvanced: boolean;
 }
 export function ExportDialog() {
 	const {
@@ -127,6 +131,10 @@ export function ExportDialog() {
 			exportTo: "file",
 			resolution: { label: "Original", value: "original", width: 0, height: 0 },
 			compression: "HighQuality",
+			gpuAsyncDepth: 32,
+			gpuDelay: 4,
+			gpuRcLookahead: 16,
+			showAdvanced: false,
 		}),
 		{ name: "export_settings" },
 	);
@@ -154,6 +162,9 @@ export function ExportDialog() {
 							y: actualHeight,
 						},
 						compression: settings.compression,
+						gpu_async_depth: settings.gpuAsyncDepth,
+						gpu_delay: settings.gpuDelay,
+						gpu_rc_lookahead: settings.gpuRcLookahead,
 					}
 				: {
 						format: "Gif",
@@ -614,6 +625,96 @@ export function ExportDialog() {
 								</div>
 							</div>
 						</div>
+						{/* Advanced Settings (MP4 only) */}
+						<Show when={settings.format === "Mp4"}>
+							<div class="w-full p-4 rounded-xl dark:bg-gray-2 bg-gray-3">
+								<div class="flex flex-col gap-3">
+									<div class="flex justify-between items-center">
+										<h3 class="text-gray-12">GPU Optimization (Advanced)</h3>
+										<Button
+											variant="gray"
+											class="text-xs"
+											onClick={() => setSettings("showAdvanced", !settings.showAdvanced)}
+										>
+											{settings.showAdvanced ? "Hide" : "Show"}
+										</Button>
+									</div>
+									<Show when={settings.showAdvanced}>
+										<div class="flex flex-col gap-4 pt-2">
+											{/* Async Depth */}
+											<div class="flex flex-col gap-2">
+												<div class="flex justify-between items-center">
+													<label class="text-sm text-gray-11">Async Depth</label>
+													<input
+														type="number"
+														min="1"
+														max="64"
+														value={settings.gpuAsyncDepth}
+														onChange={(e) => setSettings("gpuAsyncDepth", Number.parseInt(e.target.value) || 32)}
+														class="px-2 py-1 w-16 text-sm rounded bg-gray-3 dark:bg-gray-4 text-gray-12"
+													/>
+												</div>
+												<input
+													type="range"
+													min="1"
+													max="64"
+													value={settings.gpuAsyncDepth}
+													onChange={(e) => setSettings("gpuAsyncDepth", Number.parseInt(e.target.value))}
+													class="w-full"
+												/>
+												<p class="text-xs text-gray-11">GPU parallel frame processing (higher = faster, more VRAM)</p>
+											</div>
+											{/* Delay */}
+											<div class="flex flex-col gap-2">
+												<div class="flex justify-between items-center">
+													<label class="text-sm text-gray-11">Frame Delay</label>
+													<input
+														type="number"
+														min="0"
+														max="16"
+														value={settings.gpuDelay}
+														onChange={(e) => setSettings("gpuDelay", Number.parseInt(e.target.value) || 4)}
+														class="px-2 py-1 w-16 text-sm rounded bg-gray-3 dark:bg-gray-4 text-gray-12"
+													/>
+												</div>
+												<input
+													type="range"
+													min="0"
+													max="16"
+													value={settings.gpuDelay}
+													onChange={(e) => setSettings("gpuDelay", Number.parseInt(e.target.value))}
+													class="w-full"
+												/>
+												<p class="text-xs text-gray-11">Frame reordering for better compression</p>
+											</div>
+											{/* RC Lookahead */}
+											<div class="flex flex-col gap-2">
+												<div class="flex justify-between items-center">
+													<label class="text-sm text-gray-11">Rate Control Lookahead</label>
+													<input
+														type="number"
+														min="0"
+														max="32"
+														value={settings.gpuRcLookahead}
+														onChange={(e) => setSettings("gpuRcLookahead", Number.parseInt(e.target.value) || 16)}
+														class="px-2 py-1 w-16 text-sm rounded bg-gray-3 dark:bg-gray-4 text-gray-12"
+													/>
+												</div>
+												<input
+													type="range"
+													min="0"
+													max="32"
+													value={settings.gpuRcLookahead}
+													onChange={(e) => setSettings("gpuRcLookahead", Number.parseInt(e.target.value))}
+													class="w-full"
+												/>
+												<p class="text-xs text-gray-11">Lookahead frames for bitrate optimization</p>
+											</div>
+										</div>
+									</Show>
+								</div>
+							</div>
+						</Show>
 					</div>
 				</DialogContent>
 			</Show>

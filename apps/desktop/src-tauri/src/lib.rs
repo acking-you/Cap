@@ -751,6 +751,55 @@ async fn open_file_path(_app: AppHandle, path: PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+#[specta::specta]
+#[instrument(skip(_app))]
+async fn open_logs_directory(_app: AppHandle) -> Result<(), String> {
+    let logs_dir = {
+        #[cfg(target_os = "macos")]
+        let path = dirs::home_dir()
+            .ok_or("Failed to get home directory")?
+            .join("Library/Logs")
+            .join("so.cap.desktop");
+
+        #[cfg(not(target_os = "macos"))]
+        let path = dirs::data_local_dir()
+            .ok_or("Failed to get local data directory")?
+            .join("so.cap.desktop")
+            .join("logs");
+
+        path
+    };
+
+    let logs_dir_str = logs_dir.to_str().ok_or("Invalid logs directory path")?;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(logs_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open logs directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(logs_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open logs directory: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(logs_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open logs directory: {e}"))?;
+    }
+
+    Ok(())
+}
+
 #[derive(Deserialize, specta::Type, tauri_specta::Event, Debug, Clone)]
 struct RenderFrameEvent {
     frame_number: u32,
@@ -1965,6 +2014,7 @@ pub async fn run(recording_logging_handle: LoggingHandle, logs_dir: PathBuf) {
             copy_video_to_clipboard,
             copy_screenshot_to_clipboard,
             open_file_path,
+            open_logs_directory,
             get_video_metadata,
             create_editor_instance,
             get_mic_waveforms,

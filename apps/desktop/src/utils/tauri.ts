@@ -89,6 +89,9 @@ async copyScreenshotToClipboard(path: string) : Promise<null> {
 async openFilePath(path: string) : Promise<null> {
     return await TAURI_INVOKE("open_file_path", { path });
 },
+async openLogsDirectory() : Promise<null> {
+    return await TAURI_INVOKE("open_logs_directory");
+},
 async getVideoMetadata(path: string) : Promise<VideoRecordingMetadata> {
     return await TAURI_INVOKE("get_video_metadata", { path });
 },
@@ -417,7 +420,7 @@ export type LogicalPosition = { x: number; y: number }
 export type LogicalSize = { width: number; height: number }
 export type MainWindowRecordingStartBehaviour = "close" | "minimise"
 export type ModelIDType = string
-export type Mp4ExportSettings = { fps: number; resolution_base: XY<number>; compression: ExportCompression }
+export type Mp4ExportSettings = { fps: number; resolution_base: XY<number>; compression: ExportCompression; gpu_async_depth?: number | null; gpu_delay?: number | null; gpu_rc_lookahead?: number | null }
 export type MultipleSegment = { display: VideoMeta; camera?: VideoMeta | null; mic?: AudioMeta | null; system_audio?: AudioMeta | null; cursor?: string | null }
 export type MultipleSegments = { segments: MultipleSegment[]; cursors: Cursors; status?: StudioRecordingStatus | null }
 export type NewNotification = { title: string; body: string; is_error: boolean }
